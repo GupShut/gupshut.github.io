@@ -3,8 +3,8 @@ const options: URLSearchParams = new URL(location.toString()).searchParams
 let modified: boolean = false
 options.forEach(() => modified = true)
 const damage: boolean = "true" != options.get("inv")
-const speed: number = +options.get("speed")! || 18
-const bulletDelay: number = +options.get("delay")! || 900
+let speed: number = +options.get("speed")! || 18
+let bulletDelay: number = +options.get("delay")! || 900
 
 const cnv: HTMLCanvasElement = document.querySelector('#game')!
 const ctx = cnv.getContext('2d')!
@@ -14,6 +14,7 @@ const lsButton: HTMLButtonElement = document.querySelector('#activate-ls')!
 const fullscreenButton: HTMLButtonElement = document.querySelector('#fullscreen')!
 const scoreText: HTMLSpanElement = document.querySelector('#score')!
 const highScoreText: HTMLSpanElement = document.querySelector('#high-score')!
+const extremeInp: HTMLInputElement = document.querySelector('#extreme')!
 
 let lsConfirmed: boolean = null != localStorage.getItem('gup-als')
 let highScore: number = 0
@@ -37,11 +38,29 @@ interface Enemy {
     y: number,
     rot: number
 }
-const enemy: Enemy = {
-    x: 0,
-    y: 0,
-    rot: 0
+type posType = "middle" | "left" | "right"
+class Enemy {
+    baseX: number
+    baseY: number
+    x: number
+    y: number
+    rot: number = 0
+    type: posType = "middle"
+
+    constructor(x: number, y: number, pType: posType = "middle") {
+        this.baseX = x
+        this.baseY = y
+        this.x = x
+        this.y = y
+        this.type = pType
+    }
 }
+
+let enemies: Enemy[] = []
+// const enemy: Enemy = new Enemy(
+//     0,
+//     0
+// )
 
 interface Coin {
     x: number,
@@ -55,7 +74,7 @@ const coin: Coin = {
 adjustCanvas()
 
 let bullets: Bullet[] = []
-let shootInt: NodeJS.Timer 
+let shootInt: ReturnType<typeof setInterval>
 
 gameLoop()
 
@@ -77,7 +96,11 @@ function gameLoop() {
             addEventListener('touchmove', touchHandler)
             addEventListener('touchend', touchHandler)
     
-            shootInt = setInterval(() => bullets.push(new Bullet(enemy.x, enemy.y, enemy.rot)), bulletDelay)
+            shootInt = setInterval(() => {
+                for (let enemy of enemies) {
+                    bullets.push(new Bullet(enemy.x, enemy.y, enemy.rot)), bulletDelay
+                }
+            }, bulletDelay)
     
             run = true
             paused = false
@@ -122,9 +145,14 @@ function gameLoop() {
 
     // enemy
     
-    enemy.rot = Math.atan2(mouseY-innerHeight/2, mouseX-innerWidth/2)
-    enemy.x = innerWidth/2 + Math.cos(enemy.rot) * (50 + 2)
-    enemy.y = innerHeight/2 + Math.sin(enemy.rot) * (50 + 2)
+    for (let enemy of enemies) {
+        enemy.x = enemy.baseX + Math.cos(enemy.rot) * (50 + 2)
+        enemy.y = enemy.baseY + Math.sin(enemy.rot) * (50 + 2)
+    }
+
+    // enemy.rot = Math.atan2(mouseY-innerHeight/2, mouseX-innerWidth/2)
+    // enemy.x = innerWidth/2 + Math.cos(enemy.rot) * (50 + 2)
+    // enemy.y = innerHeight/2 + Math.sin(enemy.rot) * (50 + 2)
     
     // coin
 
@@ -139,20 +167,21 @@ function gameLoop() {
     ctx.fill()
     ctx.closePath()
 
-    // enemy bg
-    ctx.beginPath()
-    ctx.arc(innerWidth/2, innerHeight/2, 75, 0, 2 * Math.PI)
-    ctx.fillStyle = 'white'
-    ctx.fill()
-    ctx.closePath()
-
     // enemy
 
-    ctx.beginPath()
-    ctx.arc(enemy.x, enemy.y, 25, 0, 2 * Math.PI)
-    ctx.fillStyle = 'black'
-    ctx.fill()
-    ctx.closePath()
+    for (let enemy of enemies) {
+        ctx.beginPath()
+        ctx.arc(enemy.baseX, enemy.baseY, 75, 0, 2 * Math.PI)
+        ctx.fillStyle = 'white'
+        ctx.fill()
+        ctx.closePath()
+
+        ctx.beginPath()
+        ctx.arc(enemy.x, enemy.y, 25, 0, 2 * Math.PI)
+        ctx.fillStyle = 'black'
+        ctx.fill()
+        ctx.closePath()
+    }
 
     // player
     ctx.beginPath()
@@ -239,8 +268,10 @@ function gameLoop() {
 
     // player enter eye
 
-    if (distance(mouseX-innerWidth/2, mouseY-innerHeight/2) <= 25+75 && damage)
-        gameOver()
+    for (let enemy of enemies) {
+        if (distance(mouseX-enemy.baseX, mouseY-enemy.baseY) <= 25+75 && damage)
+            gameOver()
+    }
 }
 
 class Bullet {
@@ -263,6 +294,20 @@ class Bullet {
 function adjustCanvas() {
     cnv.width = innerWidth
     cnv.height = innerHeight
+
+    for (let enemy of enemies) {
+        console.log(enemy)
+        enemy.baseY = innerHeight/2
+
+        if (enemy.type == "middle") {
+            enemy.baseX = innerWidth/2
+        } else if (enemy.type == "left") {
+            enemy.baseX = innerWidth/3
+        } else {
+            enemy.baseX = 2 * innerWidth/3
+        }
+    }
+
     relocateCoin()
 }
 
@@ -277,7 +322,11 @@ function pauseGame(e: KeyboardEvent) {
         addEventListener('touchmove', touchHandler)
         addEventListener('touchend', touchHandler)
 
-        shootInt = setInterval(() => bullets.push(new Bullet(enemy.x, enemy.y, enemy.rot)), bulletDelay)
+        shootInt = setInterval(() => {
+            for (let enemy of enemies) {
+                bullets.push(new Bullet(enemy.x, enemy.y, enemy.rot)), bulletDelay
+            }
+        }, bulletDelay)
 
         run = true
         paused = false
@@ -315,12 +364,32 @@ function start() {
     showClickText = false
     relocateCoin()
 
+    if (!modified && extremeInp.checked) {
+        speed = 25
+        bulletDelay = 600
+    } else {
+        speed = 18
+        bulletDelay = 900
+    }
+
     addEventListener('mousemove', mouseHandler)
     addEventListener('touchstart', touchHandler)
     addEventListener('touchmove', touchHandler)
     addEventListener('touchend', touchHandler)
 
-    shootInt = setInterval(() => bullets.push(new Bullet(enemy.x, enemy.y, enemy.rot)), bulletDelay)
+    if (extremeInp.checked) {
+        enemies.push(new Enemy(innerWidth/3, innerHeight/2, "left"))
+        enemies.push(new Enemy(2 * innerWidth/3, innerHeight/2, "right"))
+        console.log(new Enemy(0, 0, "right"))
+    } else {
+        enemies.push(new Enemy(innerWidth/2, innerHeight/2))
+    }
+
+    shootInt = setInterval(() => {
+        for (let enemy of enemies) {
+            bullets.push(new Bullet(enemy.x, enemy.y, enemy.rot)), bulletDelay
+        }
+    }, bulletDelay)
 
     run = true
 }
@@ -334,7 +403,9 @@ function relocateCoin() {
     coin.x = Math.floor(Math.random()*(innerWidth-20*2))+20
     coin.y = Math.floor(Math.random()*(innerHeight-20*2))+20
 
-    if (distance(coin.x-innerWidth/2, coin.y-innerHeight/2) <= 10+75 || distance(mouseX-coin.x, mouseY-coin.y) <= 10+25) relocateCoin()
+    for (let enemy of enemies) {
+        if (distance(coin.x-enemy.baseX, coin.y-enemy.baseY) <= 10+75 || distance(mouseX-coin.x, mouseY-coin.y) <= 10+25) relocateCoin()
+    }
 }
 
 function gameOver() {
@@ -342,6 +413,8 @@ function gameOver() {
 
     run = false
     clearInterval(shootInt)
+
+    enemies = []
 
     removeEventListener('mousemove', mouseHandler)
     removeEventListener('touchstart', touchHandler)
@@ -380,13 +453,17 @@ lsButton.addEventListener('click', () => {
 function mouseHandler(e: MouseEvent) {
     mouseX = e.x
     mouseY = e.y
-    enemy.rot = Math.atan2(mouseY-innerHeight/2, mouseX-innerWidth/2)
+    for (let enemy of enemies) {
+        enemy.rot = Math.atan2(mouseY-enemy.baseY, mouseX-enemy.baseX)
+    }
 }
 
 function touchHandler(e: TouchEvent) {
     mouseX = e.touches[0].clientX
     mouseY = e.touches[0].clientY
-    enemy.rot = Math.atan2(mouseY-innerHeight/2, mouseX-innerWidth/2)
+    for (let enemy of enemies) {
+        enemy.rot = Math.atan2(mouseY-enemy.baseY, mouseX-enemy.baseX)
+    }
 }
 
 function distance(a: number, b: number) {
